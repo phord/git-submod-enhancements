@@ -416,7 +416,15 @@ cmd_foreach()
 				prefix="$prefix$sm_path/"
 				clear_local_git_env
 				# we make $path available to scripts ...
-				path=$sm_path
+				path="$sm_path"
+
+				# make all submodule variables available to scripts
+				eval $(git config -f .gitmodules --get-regexp "^submodule\.${name}\..*" |
+				sed -e "s|^submodule\.${name}\.||" |
+				while read VAR_NAME VAR_VALUE ; do
+					VAR_NAME=$(printf '%s' "$VAR_NAME" | tr A-Z a-z | sed -e 's/^[^a-z]/_/' -e 's/[^a-z0-9]/_/g')
+					printf 'submodule_%s=%s;\n' "$VAR_NAME" "'$VAR_VALUE'"
+				done)
 				cd "$sm_path" &&
 				eval "$@" &&
 				if test -n "$recursive"
