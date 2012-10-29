@@ -79,6 +79,9 @@ struct wt_status_state {
 	int rebase_interactive_in_progress;
 	int cherry_pick_in_progress;
 	int bisect_in_progress;
+	int split_in_progress;
+	int has_unmerged;
+	int commit_is_pending;
 };
 
 void wt_status_prepare(struct wt_status *s);

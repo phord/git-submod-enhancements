@@ -781,7 +781,7 @@ static void show_merge_in_progress(struct wt_status *s,
 				struct wt_status_state *state,
 				const char *color)
 {
-	if (has_unmerged(s)) {
+	if (state->has_unmerged) {
 		status_printf_ln(s, color, _("You have unmerged paths."));
 		if (advice_status_hints)
 			status_printf_ln(s, color,
@@ -867,9 +867,7 @@ static void show_rebase_in_progress(struct wt_status *s,
 				struct wt_status_state *state,
 				const char *color)
 {
-	struct stat st;
-
-	if (has_unmerged(s)) {
+	if (state->has_unmerged) {
 		status_printf_ln(s, color, _("You are currently rebasing."));
 		if (advice_status_hints) {
 			status_printf_ln(s, color,
@@ -879,12 +877,12 @@ static void show_rebase_in_progress(struct wt_status *s,
 			status_printf_ln(s, color,
 				_("  (use \"git rebase --abort\" to check out the original branch)"));
 		}
-	} else if (state->rebase_in_progress || !stat(git_path("MERGE_MSG"), &st)) {
+	} else if (state->rebase_in_progress || state->commit_is_pending) {
 		status_printf_ln(s, color, _("You are currently rebasing."));
 		if (advice_status_hints)
 			status_printf_ln(s, color,
 				_("  (all conflicts fixed: run \"git rebase --continue\")"));
-	} else if (split_commit_in_progress(s)) {
+	} else if (state->split_in_progress) {
 		status_printf_ln(s, color, _("You are currently splitting a commit during a rebase."));
 		if (advice_status_hints)
 			status_printf_ln(s, color,
@@ -907,7 +905,7 @@ static void show_cherry_pick_in_progress(struct wt_status *s,
 {
 	status_printf_ln(s, color, _("You are currently cherry-picking."));
 	if (advice_status_hints) {
-		if (has_unmerged(s))
+		if (state->has_unmerged)
 			status_printf_ln(s, color,
 				_("  (fix conflicts and run \"git commit\")"));
 		else
@@ -955,6 +953,10 @@ static void wt_status_get_state(struct wt_status *s , struct wt_status_state *st
 	}
 	if (!stat(git_path("BISECT_LOG"), &st))
 		state->bisect_in_progress = 1;
+
+	state->has_unmerged = has_unmerged(s);
+	state->split_in_progress = split_commit_in_progress(s);
+	state->commit_is_pending = !stat(git_path("MERGE_MSG"), &st);
 }
 
 static void wt_status_print_state(struct wt_status *s)
