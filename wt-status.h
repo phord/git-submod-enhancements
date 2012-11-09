@@ -24,6 +24,12 @@ enum untracked_status_type {
 	SHOW_ALL_UNTRACKED_FILES
 };
 
+enum sequencer_status_type {
+	SHOW_SEQUENCER_NO=0,
+	SHOW_SEQUENCER_YES,
+	SHOW_SEQUENCER_ONLY
+};
+
 /* from where does this commit originate */
 enum commit_whence {
 	FROM_COMMIT,     /* normal */
@@ -59,6 +65,7 @@ struct wt_status {
 	unsigned colopts;
 	int null_termination;
 	int show_branch;
+	enum sequencer_status_type show_sequencer;
 
 	/* These are computed during processing of the individual sections */
 	int commitable;

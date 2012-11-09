@@ -41,6 +41,26 @@ OPTIONS
 --long::
 	Give the output in the long-format. This is the default.
 
+-S::
+--sequence::
+	Show the git sequencer status. This shows zero or more words
+	describing the state of the git sequencer. If --short is also
+	given, the words are shown at the beginning of the short-format
+	display after the one-line branch information, if present.  If
+	--short is not given, then only the sequencer words are shown
+	with no other status information.
++
+	merge              a merge is in progress
+	am                 an am is in progress
+	am-is-empty        the am patch is empty
+	rebase             a rebase is in progress
+	rebase-interactive an interactive rebase is in progress
+	cherry-pick        a cherry-pick is in progress
+	bisect             a bisect is in progress
+	conflicted         there are unresolved conflicts
+	commit-pending     a commit operation is waiting to be completed
+	splitting          interactive rebase, commit is being split
+
 -u[<mode>]::
 --untracked-files[=<mode>]::
 	Show untracked files.
