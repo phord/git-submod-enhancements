@@ -9,7 +9,7 @@ USAGE="[--quiet] add [-b branch] [-f|--force] [--reference <repository>] [--] <r
    or: $dashless [--quiet] status [--cached] [--recursive] [--] [<path>...]
    or: $dashless [--quiet] init [--] [<path>...]
    or: $dashless [--quiet] update [--init] [-N|--no-fetch] [-f|--force] [--rebase] [--reference <repository>] [--merge] [--recursive] [--] [<path>...]
-   or: $dashless [--quiet] summary [--cached|--files] [--summary-limit <n>] [commit] [--] [<path>...]
+   or: $dashless [--quiet] summary [--cached|--files] [--summary-limit <n>] [--recursive] [commit] [--] [<path>...]
    or: $dashless [--quiet] foreach [--recursive] <command>
    or: $dashless [--quiet] sync [--recursive] [--] [<path>...]"
 OPTIONS_SPEC=
@@ -29,6 +29,8 @@ files=
 nofetch=
 update=
 prefix=
+summary_limit=
+for_status=
 
 # The function takes at most 2 arguments. The first argument is the
 # URL that navigates to the submodule origin repo. When relative, this URL
@@ -718,8 +720,6 @@ set_name_rev () {
 # $@ = [commit (default 'HEAD'),] requested paths (default all)
 #
 cmd_summary() {
-	summary_limit=-1
-	for_status=
 	diff_cmd=diff-index
 
 	# parse $args after "submodule ... summary".
@@ -744,6 +744,9 @@ cmd_summary() {
 			fi
 			shift
 			;;
+		--recursive)
+			recursive=1
+			;;
 		--)
 			shift
 			break
@@ -758,6 +761,7 @@ cmd_summary() {
 		shift
 	done
 
+	test -z "$summary_limit" && summary_limit=-1
 	test $summary_limit = 0 && return
 
 	if rev=$(git rev-parse -q --verify --default HEAD ${1+"$1"})
@@ -781,9 +785,15 @@ cmd_summary() {
 		head=
 	fi
 
+	if test -n "$for_status"; then
+		which=dirty
+	else
+		which=untracked
+	fi
+
 	cd_to_toplevel
 	# Get modified modules cared by user
-	modules=$(git $diff_cmd $cached --ignore-submodules=dirty --raw $head -- "$@" |
+	modules=$(git $diff_cmd $cached --ignore-submodules=$which --raw $head -- "$@" |
 		sane_egrep '^:([0-7]* )?160000' |
 		while read mod_src mod_dst sha1_src sha1_dst status name
 		do
@@ -797,7 +807,7 @@ cmd_summary() {
 
 	test -z "$modules" && return
 
-	git $diff_cmd $cached --ignore-submodules=dirty --raw $head -- $modules |
+	git $diff_cmd $cached --ignore-submodules=$which --raw $head -- $modules |
 	sane_egrep '^:([0-7]* )?160000' |
 	cut -c2- |
 	while read mod_src mod_dst sha1_src sha1_dst status name
@@ -834,13 +844,13 @@ cmd_summary() {
 		total_commits=
 		case "$missing_src,$missing_dst" in
 		t,)
-			errmsg="$(eval_gettext "  Warn: \$name doesn't contain commit \$sha1_src")"
+			errmsg="$(eval_gettext "  Warn: \$prefix\$name doesn't contain commit \$sha1_src")"
 			;;
 		,t)
-			errmsg="$(eval_gettext "  Warn: \$name doesn't contain commit \$sha1_dst")"
+			errmsg="$(eval_gettext "  Warn: \$prefix\$name doesn't contain commit \$sha1_dst")"
 			;;
 		t,t)
-			errmsg="$(eval_gettext "  Warn: \$name doesn't contain commits \$sha1_src and \$sha1_dst")"
+			errmsg="$(eval_gettext "  Warn: \$prefix\$name doesn't contain commits \$sha1_src and \$sha1_dst")"
 			;;
 		*)
 			errmsg=
@@ -863,43 +873,55 @@ cmd_summary() {
 
 		sha1_abbr_src=$(echo $sha1_src | cut -c1-7)
 		sha1_abbr_dst=$(echo $sha1_dst | cut -c1-7)
-		if test $status = T
+		if ! test $sha1_src = $sha1_dst
 		then
-			blob="$(gettext "blob")"
-			submodule="$(gettext "submodule")"
-			if test $mod_dst = 160000
+			if test $status = T
 			then
-				echo "* $name $sha1_abbr_src($blob)->$sha1_abbr_dst($submodule)$total_commits:"
+				blob="$(gettext "blob")"
+				submodule="$(gettext "submodule")"
+				if test $mod_dst = 160000
+				then
+					echo "* $prefix$name $sha1_abbr_src($blob)->$sha1_abbr_dst($submodule)$total_commits:"
+				else
+					echo "* $prefix$name $sha1_abbr_src($submodule)->$sha1_abbr_dst($blob)$total_commits:"
+				fi
 			else
-				echo "* $name $sha1_abbr_src($submodule)->$sha1_abbr_dst($blob)$total_commits:"
+				echo "* $prefix$name $sha1_abbr_src...$sha1_abbr_dst$total_commits:"
 			fi
-		else
-			echo "* $name $sha1_abbr_src...$sha1_abbr_dst$total_commits:"
-		fi
-		if test -n "$errmsg"
-		then
-			# Don't give error msg for modification whose dst is not submodule
-			# i.e. deleted or changed to blob
-			test $mod_dst = 160000 && echo "$errmsg"
-		else
-			if test $mod_src = 160000 -a $mod_dst = 160000
+			if test -n "$errmsg"
 			then
-				limit=
-				test $summary_limit -gt 0 && limit="-$summary_limit"
-				GIT_DIR="$name/.git" \
-				git log $limit --pretty='format:  %m %s' \
-				--first-parent $sha1_src...$sha1_dst
-			elif test $mod_dst = 160000
-			then
-				GIT_DIR="$name/.git" \
-				git log --pretty='format:  > %s' -1 $sha1_dst
+				# Don't give error msg for modification whose dst is not submodule
+				# i.e. deleted or changed to blob
+				test $mod_dst = 160000 && echo "$errmsg"
 			else
-				GIT_DIR="$name/.git" \
-				git log --pretty='format:  < %s' -1 $sha1_src
+				if test $mod_src = 160000 -a $mod_dst = 160000
+				then
+					limit=
+					test $summary_limit -gt 0 && limit="-$summary_limit"
+					GIT_DIR="$name/.git" \
+					git log $limit --pretty='format:  %m %s' \
+					--first-parent $sha1_src...$sha1_dst
+				elif test $mod_dst = 160000
+				then
+					GIT_DIR="$name/.git" \
+					git log --pretty='format:  > %s' -1 $sha1_dst
+				else
+					GIT_DIR="$name/.git" \
+					git log --pretty='format:  < %s' -1 $sha1_src
+				fi
+				echo
 			fi
 			echo
 		fi
-		echo
+		if test -n "$recursive"
+		then
+			(
+			prefix="$prefix$name/"
+			clear_local_git_env
+			cd "$name" &&
+			eval cmd_summary
+			)
+		fi
 	done |
 	if test -n "$for_status"; then
 		if [ -n "$files" ]; then
