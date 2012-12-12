@@ -1201,31 +1201,40 @@ static void wt_shortstatus_print_tracking(struct wt_status *s)
 	fputc(s->null_termination ? '\0' : '\n', s->fp);
 }
 
-static void wt_print_token(struct wt_status *s, const char *token, int active)
+static void print_token(struct wt_status *s, const char *token, int active)
 {
 	if (active) {
-		color_fprintf(s->fp, color(WT_STATUS_HEADER, s), "## %s", prefix, token);
+		color_fprintf(s->fp, color(WT_STATUS_HEADER, s), "#= %s", token);
 		fputc(s->null_termination ? '\0' : '\n', s->fp);
 	}
 }
 
-static void wt_sequencer_print(struct wt_status *s)
+static void wt_tokens_print(struct wt_status *s)
 {
 	struct wt_status_state state;
+	int dirty_submodules;
+	int worktree_changes = wt_status_check_worktree_changes(s, &dirty_submodules);
 
 	wt_status_get_state(s, &state);
 
-	wt_print_token(s, "merge", state.merge_in_progress);
-	wt_print_token(s, "am", state.am_in_progress);
-	wt_print_token(s, "rebase", state.rebase_in_progress);
-	wt_print_token(s, "rebase-interactive", state.rebase_interactive_in_progress);
-	wt_print_token(s, "cherry-pick", state.cherry_pick_in_progress);
-	wt_print_token(s, "bisect", state.bisect_in_progress);
-	wt_print_token(s, "am-empty", state.am_empty_patch);
+	print_token(s, "deleted", worktree_changes<0);
+	print_token(s, "modified", s->change.nr);
+	print_token(s, "untracked", s->untracked.nr);
+	print_token(s, "ignored", s->ignored.nr);
+	print_token(s, "unmerged", state.has_unmerged);
 
-	wt_print_token(s, "conflicted", state.has_unmerged);
-	wt_print_token(s, "commit-pending", state.commit_is_pending);
-	wt_print_token(s, "splitting", state.split_in_progress);
+	print_token(s, "dirty-submodules", dirty_submodules);
+
+	print_token(s, "merge-in-progress", state.merge_in_progress);
+	print_token(s, "am-in-progress", state.am_in_progress);
+	print_token(s, "rebase-in-progress", state.rebase_in_progress);
+	print_token(s, "rebase-interactive-in-progress", state.rebase_interactive_in_progress);
+	print_token(s, "cherry-pick-in-progress", state.cherry_pick_in_progress);
+	print_token(s, "bisect-in-progress", state.bisect_in_progress);
+
+	print_token(s, "am-empty-patch", state.am_empty_patch);
+	print_token(s, "commit-pending", state.commit_is_pending);
+	print_token(s, "split-in-progress", state.split_in_progress);
 }
 
 void wt_shortstatus_print(struct wt_status *s)
@@ -1235,10 +1244,10 @@ void wt_shortstatus_print(struct wt_status *s)
 	if (s->show_branch)
 		wt_shortstatus_print_tracking(s);
 
-	if (s->show_sequencer)
+	if (s->show_tokens)
 	{
-		wt_sequencer_print(s);
-		if (s->show_sequencer == SHOW_SEQUENCER_ONLY)
+		wt_tokens_print(s);
+		if (s->show_tokens == SHOW_TOKENS_ONLY)
 			return;
 	}
 

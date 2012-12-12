@@ -1066,8 +1066,8 @@ static int parse_and_validate_options(int argc, const char *argv[],
 		else if (status_format == STATUS_FORMAT_LONG)
 			die(_("--long and -z are incompatible"));
 	}
-	if (s->show_sequencer && status_format != STATUS_FORMAT_SHORT) {
-		s->show_sequencer = SHOW_SEQUENCER_ONLY;
+	if (s->show_tokens && status_format != STATUS_FORMAT_SHORT) {
+		s->show_tokens = SHOW_TOKENS_ONLY;
 		if (status_format == STATUS_FORMAT_NONE)
 			status_format = STATUS_FORMAT_SHORT;
 	}
@@ -1167,8 +1167,8 @@ int cmd_status(int argc, const char **argv, const char *prefix)
 			    N_("show status concisely"), STATUS_FORMAT_SHORT),
 		OPT_BOOLEAN('b', "branch", &s.show_branch,
 			    N_("show branch information")),
-		OPT_SET_INT('S', "sequencer", &s.show_sequencer,
-				N_("show sequencer state information"), SHOW_SEQUENCER_YES),
+		OPT_SET_INT('T', "tree", &s.show_tokens,
+			    N_("show worktree status"), SHOW_TOKENS_YES),
 		OPT_SET_INT(0, "porcelain", &status_format,
 			    N_("machine-readable output"),
 			    STATUS_FORMAT_PORCELAIN),
@@ -1209,8 +1209,8 @@ int cmd_status(int argc, const char **argv, const char *prefix)
 			die(_("--long and -z are incompatible"));
 	}
 
-	if (s.show_sequencer && status_format != STATUS_FORMAT_SHORT) {
-		s.show_sequencer = SHOW_SEQUENCER_ONLY;
+	if (s.show_tokens && status_format != STATUS_FORMAT_SHORT) {
+		s.show_tokens = SHOW_TOKENS_ONLY;
 		if (status_format == STATUS_FORMAT_NONE)
 			status_format = STATUS_FORMAT_SHORT;
 	}
@@ -1411,8 +1411,8 @@ int cmd_commit(int argc, const char **argv, const char *prefix)
 		OPT_SET_INT(0, "short", &status_format, N_("show status concisely"),
 			    STATUS_FORMAT_SHORT),
 		OPT_BOOLEAN(0, "branch", &s.show_branch, N_("show branch information")),
-		OPT_SET_INT(0, "sequencer", &s.show_sequencer,
-			    N_("show sequencer state information"), SHOW_SEQUENCER_YES),
+		OPT_SET_INT('T', "tree", &s.show_tokens,
+			    N_("show worktree status"), SHOW_TOKENS_YES),
 		OPT_SET_INT(0, "porcelain", &status_format,
 			    N_("machine-readable output"), STATUS_FORMAT_PORCELAIN),
 		OPT_SET_INT(0, "long", &status_format,
