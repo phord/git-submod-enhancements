@@ -27,7 +27,7 @@ static int show_killed;
 static int show_valid_bit;
 static int line_terminator = '\n';
 static int debug_mode;
-
+static int recurse_submodules;
 static const char *prefix;
 static int max_prefix_len;
 static int prefix_len;
@@ -460,6 +460,8 @@ int cmd_ls_files(int argc, const char **argv, const char *cmd_prefix)
 			N_("pretend that paths removed since <tree-ish> are still present")),
 		OPT__ABBREV(&abbrev),
 		OPT_BOOL(0, "debug", &debug_mode, N_("show debugging data")),
+		OPT_BOOL(0, "recurse-submodules", &recurse_submodules,
+			N_("recurse into submodules")),
 		OPT_END()
 	};
 
