@@ -480,8 +480,15 @@ static int grep_object(struct grep_opt *opt, const struct pathspec *pathspec,
 		len = name ? strlen(name) : 0;
 		strbuf_init(&base, PATH_MAX + len + 1);
 		if (len) {
+			struct object_context ctx;
+			unsigned char sha1[20];
+			char delimiter = ':';
+			if (!get_sha1_with_context(name, 0, sha1, &ctx) &&
+				ctx.path[0]!=0)
+				delimiter='/';
 			strbuf_add(&base, name, len);
-			strbuf_addch(&base, ':');
+			if (name[len-1] != delimiter)
+				strbuf_addch(&base, delimiter);
 		}
 		init_tree_desc(&tree, data, size);
 		hit = grep_tree(opt, pathspec, &tree, &base, base.len,

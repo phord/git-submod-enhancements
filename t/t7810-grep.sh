@@ -886,6 +886,21 @@ test_expect_success 'grep -e -- -- path' '
 '
 
 cat >expected <<EOF
+HEAD:t/a/v:1:vvv
+HEAD:t/v:1:vvv
+EOF
+
+test_expect_success "grep HEAD -- path/" '
+	git grep -n -e vvv HEAD -- t/ >actual &&
+	test_cmp expected actual
+'
+
+test_expect_success "grep HEAD:path" '
+	git grep -n -e vvv HEAD:t/ >actual &&
+	test_cmp expected actual
+'
+
+cat >expected <<EOF
 hello.c:int main(int argc, const char **argv)
 hello.c:	printf("Hello world.\n");
 EOF
