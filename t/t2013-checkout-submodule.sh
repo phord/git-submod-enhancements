@@ -269,7 +269,7 @@ test_expect_failure '"checkout --recurse-submodules" does not care about untrack
 
 test_expect_failure '"checkout --recurse-submodules" needs -f when submodule commit is not present (but does fail anyway)' '
 	git checkout --recurse-submodules -b bogus_commit master &&
-	git update-index --cacheinfo 160000 0123456789012345678901234567890123456789 submodule
+	git update-index --cacheinfo 160000 0123456789012345678901234567890123456789 submodule &&
 	BOGUS_TREE=$(git write-tree) &&
 	BOGUS_COMMIT=$(echo "bogus submodule commit" | git commit-tree $BOGUS_TREE) &&
 	git commit -m "bogus submodule commit" &&
