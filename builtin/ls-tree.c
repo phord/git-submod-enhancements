@@ -7,6 +7,7 @@
 #include "blob.h"
 #include "tree.h"
 #include "commit.h"
+#include "submodule.h"
 #include "quote.h"
 #include "builtin.h"
 #include "parse-options.h"
@@ -18,22 +19,26 @@ static int line_termination = '\n';
 #define LS_SHOW_TREES 4
 #define LS_NAME_ONLY 8
 #define LS_SHOW_SIZE 16
+#define LS_SUBMODULES 32
+
 static int abbrev;
 static int ls_options;
 static struct pathspec pathspec;
 static int chomp_prefix;
 static const char *ls_tree_prefix;
+static struct object_context obj_context;
 
 static const  char * const ls_tree_usage[] = {
 	N_("git ls-tree [<options>] <tree-ish> [<path>...]"),
 	NULL
 };
 
-static int show_recursive(const char *base, int baselen, const char *pathname)
+static int show_recursive(int option_flags, const char *base, int baselen,
+			  const char *pathname)
 {
 	const char **s;
 
-	if (ls_options & LS_RECURSIVE)
+	if ((ls_options & option_flags) == option_flags)
 		return 1;
 
 	s = pathspec._raw;
@@ -69,18 +74,25 @@ static int show_tree(const unsigned char *sha1, struct strbuf *base,
 	const char *type = blob_type;
 
 	if (S_ISGITLINK(mode)) {
-		/*
-		 * Maybe we want to have some recursive version here?
-		 *
-		 * Something similar to this incomplete example:
-		 *
-		if (show_subprojects(base, baselen, pathname))
-			retval = READ_TREE_RECURSIVE;
-		 *
-		 */
+		if (show_recursive(LS_SUBMODULES, base->buf, base->len, pathname)) {
+			struct strbuf path = STRBUF_INIT ;
+			if (obj_context.path && obj_context.path[0]) {
+				strbuf_addstr(&path, obj_context.path);
+				strbuf_addch(&path, '/');
+			}
+			if (base->len)
+				strbuf_add(&path, base, base->len);
+			strbuf_addstr(&path, pathname);
+			if (reach_submodule(path.buf, path.len, NULL, sha1) == REACH_SUBMODULE_OK)
+				retval = READ_TREE_RECURSIVE;
+			// TODO: Warn or die if REACH_SUBMODULE_MISSING_REF?
+
+			if (!(ls_options & LS_SHOW_TREES))
+				return retval;
+		}
 		type = commit_type;
 	} else if (S_ISDIR(mode)) {
-		if (show_recursive(base->buf, base->len, pathname)) {
+		if (show_recursive(LS_RECURSIVE, base->buf, base->len, pathname)) {
 			retval = READ_TREE_RECURSIVE;
 			if (!(ls_options & LS_SHOW_TREES))
 				return retval;
@@ -126,6 +138,8 @@ int cmd_ls_tree(int argc, const char **argv, const char *prefix)
 	const struct option ls_tree_options[] = {
 		OPT_BIT('d', NULL, &ls_options, N_("only show trees"),
 			LS_TREE_ONLY),
+		OPT_BIT('R', "recurse-submodules", &ls_options, N_("recurse into submodules"),
+			LS_SUBMODULES),
 		OPT_BIT('r', NULL, &ls_options, N_("recurse into subtrees"),
 			LS_RECURSIVE),
 		OPT_BIT('t', NULL, &ls_options, N_("show trees when recursing"),
@@ -163,9 +177,13 @@ int cmd_ls_tree(int argc, const char **argv, const char *prefix)
 	    ((LS_TREE_ONLY|LS_RECURSIVE) & ls_options))
 		ls_options |= LS_SHOW_TREES;
 
+	/* -R implies -r */
+	if (LS_SUBMODULES & ls_options)
+		ls_options |= LS_RECURSIVE;
+
 	if (argc < 1)
 		usage_with_options(ls_tree_usage, ls_tree_options);
-	if (get_sha1(argv[0], sha1))
+	if (get_sha1_with_context(argv[0], 0, sha1, &obj_context))
 		die("Not a valid object name %s", argv[0]);
 
 	/*
