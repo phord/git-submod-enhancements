@@ -117,20 +117,67 @@ void stage_updated_gitmodules(void)
 		die(_("staging updated .gitmodules failed"));
 }
 
+/*
+ * Resolve a named object to its sha1, even if the name crosses a submodule
+ * boundary.
+ */
+int submodule_get_sha1(const char *name, unsigned char *sha1, unsigned char *sm_sha1)
+{
+	struct object_context unused;
+	return get_sha1_with_context(name, 0, sha1, &unused);
+	// TODO: Traverse into the arg with boundary-crossing flags turned on
+	// TODO: Remember the 'committish' part of the name and return it in some structure;
+	//	 this is to allow us later to answer this question:
+	//	 I started at <sha1> which was named 'master:submodule/tree'.  Now I have
+	//	 traversed to 'master:submodule/tree/submodule-2/' but I need to find the
+	//	 relevant '.gitmodules' info for this path.  Where is it?  (Answer: it is
+	//	 at 'master:submodule/.gitmodules' whose sha1 is sha1_gitmodules)
+	//	 I suppose I only need to remember the last sha1 of the first tree we
+	//	 encountered after a commit or submodule boundary.  Alternatively I could
+	//	 just remember the submodule points in the prefix string.  But that would
+	//	 mean I would have to do another whole-string lookup crossing boundaries
+	//	 again, which is kind of recursivey.
+
+	return -1;
+}
+
+static int add_gitdir_odb(const char *gitdir_path);
+
+static int find_workdir_submodule_gitdir(const char *path, struct strbuf *submodule_gitdir)
+{
+	const char *git_dir;
+
+	strbuf_addf(submodule_gitdir, "%s/.git", path);
+	git_dir = read_gitfile(submodule_gitdir->buf);
+	if (git_dir) {
+		strbuf_reset(submodule_gitdir);
+		strbuf_addstr(submodule_gitdir, git_dir);
+	}
+	if (!is_directory(submodule_gitdir->buf))
+		return -1;
+	return 0;
+}
+
 static int add_submodule_odb(const char *path)
+{
+	struct strbuf submodule_gitdir = STRBUF_INIT;
+	int ret;
+
+	ret = find_workdir_submodule_gitdir(path, &submodule_gitdir);
+	if (!ret)
+		ret = add_gitdir_odb(submodule_gitdir.buf);
+
+	strbuf_release(&submodule_gitdir);
+	return ret;
+}
+
+static int add_gitdir_odb(const char *gitdir_path)
 {
 	struct strbuf objects_directory = STRBUF_INIT;
 	struct alternate_object_database *alt_odb;
 	int ret = 0;
-	const char *git_dir;
 
-	strbuf_addf(&objects_directory, "%s/.git", path);
-	git_dir = read_gitfile(objects_directory.buf);
-	if (git_dir) {
-		strbuf_reset(&objects_directory);
-		strbuf_addstr(&objects_directory, git_dir);
-	}
-	strbuf_addstr(&objects_directory, "/objects/");
+	strbuf_addf(&objects_directory, "%s/objects/", gitdir_path);
 	if (!is_directory(objects_directory.buf)) {
 		ret = -1;
 		goto done;
@@ -159,6 +206,88 @@ done:
 	return ret;
 }
 
+static int find_cached_submodule_gitdir(const char *path, struct strbuf *location)
+{
+	// TODO: when we get here we've got a path that starts with a ref:
+	// Need to resolve it.  Better idea: teach get_sha1_with_context to resolve it.
+	return -1;
+}
+
+/* Find the path to the submodule's git-dir.
+ * If path is a filename without a ref: prefix, path/.git is assumed to be correct.
+ * Otherwise, the submodule name is retrieved and the submodule is sought in
+ * $GITDIR/modules/{submodule_name}/
+ */
+int find_submodule_gitdir(const char *path, struct strbuf *location)
+{
+	// TODO: Better determination of 'cached' or not
+	if (!strchr(path,':')) return find_workdir_submodule_gitdir(path, location);
+	return find_cached_submodule_gitdir(path, location);
+}
+
+/* Add the submodule's database to alt_odb_list if it exists. Optionally
+ * lookup the commit at sha1 to determine reachability.
+ */
+int reach_submodule(const char *path, int len, const unsigned char *toplevel_sha1, const unsigned char *sha1)
+{
+	int retval=0;
+	struct strbuf sm_name = STRBUF_INIT;
+
+	strbuf_addstr(&sm_name, path);
+
+	// TODO: Fails if GIT_DIR points to some remote place.  e.g.
+	//     GIT_DIR=/elsewhere/.git git ls-tree HEAD
+//	strbuf_addf(&objects_directory, "%s/.git", path);
+	// TODO: Allow sha1 to be any reference, not just a commit (return the type?)
+	// TODO: Remove the added ODBs if any other check fails
+	// TODO: Override sha1 with special path-matching ref syntax in 'path'
+	//	This would allow
+	//		foo/master:sub/bar.c to find bar.c in master of submodule sub
+	//		foo/sub/bar.c to find bar.c in current HEAD of submodule sub
+	//		master:foo/sub/bar.c to find bar.c in HEAD of submodule sub as found at super master
+
+	// TODO: Find real submodule path in .git/modules/ by looking up name in .gitmodules
+
+	// Scenarios:
+	//	foo/bar		Look in foo/bar/.git to find the repo
+	//	HEAD:foo/bar	Look in GITDIR/modules/{path_to_name(HEAD, 'foo/bar')}/
+	//	HEAD:sub1/sub2	Look in GITDIR/modules/{path_to_name(HEAD:sub1, 'sub2')}/
+
+	if (!len)
+		return REACH_SUBMODULE_BADPATH;
+
+	if (toplevel_sha1)
+	{
+		struct strbuf gitdir = STRBUF_INIT;
+		const struct submodule *sm;
+		if (path[len-1]=='/') --len;
+		strbuf_add(&gitdir, path, len);
+
+		sm=submodule_from_path(toplevel_sha1, gitdir.buf);
+		if (!sm)
+			retval = REACH_SUBMODULE_MISSING;
+		else {
+			strbuf_reset(&sm_name);
+			strbuf_addstr(&sm_name, sm->name);
+		}
+	}
+
+	if (retval)
+		(void)0;/* all done */
+	else if (add_submodule_odb(sm_name.buf))
+		retval = REACH_SUBMODULE_MISSING;
+//	else if ( sha1 && !has_sha1_file(sha1))
+	else if ( sha1 && !lookup_commit_reference(sha1))
+		retval = REACH_SUBMODULE_MISSING_REF;
+	else
+		retval = REACH_SUBMODULE_OK;
+
+	return retval;
+}
+
+/*
+ * Parse the .gitmodules file from a specific tree to get the name of the submodule
+ */
 void set_diffopt_flags_from_submodule_config(struct diff_options *diffopt,
 					     const char *path)
 {

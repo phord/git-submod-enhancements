@@ -3,6 +3,7 @@
 #include "unpack-trees.h"
 #include "dir.h"
 #include "tree.h"
+#include "submodule.h"
 #include "pathspec.h"
 
 static const char *get_mode(const char *str, unsigned int *modep)
@@ -415,13 +416,28 @@ int traverse_trees(int n, struct tree_desc *t, struct traverse_info *info)
 	return error;
 }
 
+/* Hold a bookmark at the last topmost tree for a gitdir. We use
+ * this to find .gitmodules when needed for submodule traversal.
+ */
+struct toplevel_marker {
+	unsigned char sha1[20];
+	const char *path;
+	unsigned int len;
+};
+
 struct dir_state {
 	void *tree;
 	unsigned long size;
 	unsigned char sha1[20];
 };
 
-static int find_tree_entry(struct tree_desc *t, const char *name, unsigned char *result, unsigned *mode)
+static int get_tree_entry_1(const unsigned char *tree_sha1, const char *name,
+			    unsigned char *sha1, unsigned *mode,
+			    struct toplevel_marker *top);
+
+static int find_tree_entry(struct tree_desc *t, const char *name,
+			   unsigned char *result, unsigned *mode,
+			   struct toplevel_marker *top)
 {
 	int namelen = strlen(name);
 	while (t->size) {
@@ -445,23 +461,32 @@ static int find_tree_entry(struct tree_desc *t, const char *name, unsigned char 
 		}
 		if (name[entrylen] != '/')
 			continue;
-		if (!S_ISDIR(*mode))
+		if (!S_ISDIR(*mode) && !S_ISGITLINK(*mode))
 			break;
 		if (++entrylen == namelen) {
 			hashcpy(result, sha1);
 			return 0;
 		}
-		return get_tree_entry(sha1, name + entrylen, result, mode);
+		top->len += entrylen;
+		if (S_ISGITLINK(*mode))
+		{
+			reach_submodule(top->path, top->len, top->sha1, sha1);
+			top = NULL;
+		}
+		return get_tree_entry_1(sha1, name + entrylen, result, mode, top);
 	}
 	return -1;
 }
 
-int get_tree_entry(const unsigned char *tree_sha1, const char *name, unsigned char *sha1, unsigned *mode)
+static int get_tree_entry_1(const unsigned char *tree_sha1, const char *name,
+			    unsigned char *sha1, unsigned *mode,
+			    struct toplevel_marker *top)
 {
 	int retval;
 	void *tree;
 	unsigned long size;
 	unsigned char root[20];
+	struct toplevel_marker proxy_top ;
 
 	tree = read_object_with_reference(tree_sha1, tree_type, &size, root);
 	if (!tree)
@@ -473,12 +498,20 @@ int get_tree_entry(const unsigned char *tree_sha1, const char *name, unsigned ch
 		return 0;
 	}
 
+	if (!top)
+	{
+		// TODO: Should we store tree_sha1 here (ptr to commit) instead?
+		top = &proxy_top;
+		hashcpy(top->sha1, root);
+		top->path = name ;
+		top->len = 0;
+	}
 	if (!size) {
 		retval = -1;
 	} else {
 		struct tree_desc t;
 		init_tree_desc(&t, tree, size);
-		retval = find_tree_entry(&t, name, sha1, mode);
+		retval = find_tree_entry(&t, name, sha1, mode, top);
 	}
 	free(tree);
 	return retval;
@@ -602,7 +635,7 @@ enum follow_symlinks_result get_tree_entry_follow_symlinks(unsigned char *tree_s
 
 		/* Look up the first (or only) path component in the tree. */
 		find_result = find_tree_entry(&t, namebuf.buf,
-					      current_tree_sha1, mode);
+					      current_tree_sha1, mode, NULL);
 		if (find_result) {
 			goto done;
 		}
@@ -682,6 +715,11 @@ done:
 
 	strbuf_release(&namebuf);
 	return retval;
+}
+
+int get_tree_entry(const unsigned char *tree_sha1, const char *name, unsigned char *sha1, unsigned *mode)
+{
+	return get_tree_entry_1(tree_sha1, name, sha1, mode, NULL);
 }
 
 static int match_entry(const struct pathspec_item *item,
