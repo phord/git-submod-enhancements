@@ -8,6 +8,7 @@
 #include "tree.h"
 #include "commit.h"
 #include "tag.h"
+#include "submodule.h"
 #include "tree-walk.h"
 #include "builtin.h"
 #include "parse-options.h"
@@ -412,6 +413,7 @@ static int grep_tree(struct grep_opt *opt, const struct pathspec *pathspec,
 	enum interesting match = entry_not_interesting;
 	struct name_entry entry;
 	int old_baselen = base->len;
+	printf("grep_tree: while %s\n", base->buf);
 
 	while (tree_entry(tree, &entry)) {
 		int te_len = tree_entry_len(&entry);
@@ -431,6 +433,7 @@ static int grep_tree(struct grep_opt *opt, const struct pathspec *pathspec,
 					 check_attr ? base->buf + tn_len : NULL);
 		}
 		else if (S_ISDIR(entry.mode)) {
+			printf("grep_tree: ISDIR %s %s\n", sha1_to_hex(entry.sha1), base->buf);
 			enum object_type type;
 			struct tree_desc sub;
 			void *data;
@@ -446,6 +449,26 @@ static int grep_tree(struct grep_opt *opt, const struct pathspec *pathspec,
 			hit |= grep_tree(opt, pathspec, &sub, base, tn_len,
 					 check_attr);
 			free(data);
+		}
+		else if (S_ISGITLINK(entry.mode)) {
+			printf("grep_tree: gitlink %s %s\n", sha1_to_hex(entry.sha1), base->buf);
+			if (reach_submodule(base->buf,base->len,NULL,entry.sha1) == REACH_SUBMODULE_OK)
+			{
+				struct tree_desc sub;
+				struct tree *tree = parse_tree_indirect(entry.sha1);
+				if (!tree)
+					die("unable to load submodule commit (%s)",
+					    sha1_to_hex(entry.sha1));
+
+				strbuf_addch(base, '/');
+				init_tree_desc(&sub, tree->buffer, tree->size);
+				hit |= grep_tree(opt, pathspec, &sub, base, tn_len,
+						 check_attr);
+				free(tree);
+			}
+			else
+				printf("    failed\n");
+			// TODO: Warn or die if REACH_SUBMODULE_MISSING_REF?
 		}
 		strbuf_setlen(base, old_baselen);
 
