@@ -255,6 +255,7 @@ struct object *parse_object(const unsigned char *sha1)
 	if (obj && obj->parsed)
 		return obj;
 
+//	fprintf(stderr,__FILE__": has_sha1_file(%s)=%u\n", sha1_to_hex(sha1), has_sha1_file(sha1));
 	if ((obj && obj->type == OBJ_BLOB) ||
 	    (!obj && has_sha1_file(sha1) &&
 	     sha1_object_info(sha1, NULL) == OBJ_BLOB)) {

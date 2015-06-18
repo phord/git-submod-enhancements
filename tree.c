@@ -240,6 +240,8 @@ struct tree *parse_tree_indirect(const unsigned char *sha1)
 			return NULL;
 		if (obj->type == OBJ_TREE)
 			return (struct tree *) obj;
+		// TODO: Handle gitlinks here by dereferencing and reach'ing submodule
+		// We can't!  We don't know the path.  Fix all callers instead?
 		else if (obj->type == OBJ_COMMIT)
 			obj = &(((struct commit *) obj)->tree->object);
 		else if (obj->type == OBJ_TAG)

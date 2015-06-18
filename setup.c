@@ -146,6 +146,7 @@ int check_filename(const char *prefix, const char *arg)
 		name = prefix_filename(prefix, strlen(prefix), arg);
 	else
 		name = arg;
+	printf("Check_filename: %s\n", name) ;
 	if (!lstat(name, &st))
 		return 1; /* file exists */
 	if (errno == ENOENT || errno == ENOTDIR)

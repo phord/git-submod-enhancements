@@ -83,6 +83,7 @@ static int show_tree(const unsigned char *sha1, struct strbuf *base,
 			if (base->len)
 				strbuf_add(&path, base, base->len);
 			strbuf_addstr(&path, pathname);
+			fprintf(stderr, "show_tree: (%s)  %s  %s\n", obj_context.path, path.buf, pathname);
 			if (reach_submodule(path.buf, path.len, NULL, sha1) == REACH_SUBMODULE_OK)
 				retval = READ_TREE_RECURSIVE;
 			// TODO: Warn or die if REACH_SUBMODULE_MISSING_REF?

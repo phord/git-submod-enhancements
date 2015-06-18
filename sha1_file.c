@@ -2802,6 +2802,8 @@ void *read_sha1_file_extended(const unsigned char *sha1,
 
 	errno = 0;
 	data = read_object(repl, type, size);
+
+	// TODO: if object is a gitlink and flag has READ_SHA1_RECURSE_SUBMODULE, try to reach submodule
 	if (data)
 		return data;
 

@@ -453,10 +453,19 @@ static int find_tree_entry(struct tree_desc *t, const char *name,
 		cmp = memcmp(name, entry, entrylen);
 		if (cmp > 0)
 			continue;
+		fprintf(stderr,">> find_tree_entry: %s  %.*s\n", name, entrylen, entry);
 		if (cmp < 0)
 			break;
 		if (entrylen == namelen) {
 			hashcpy(result, sha1);
+// TODO: If S_ISGITLINK then we may still want to pull this in...
+			top->len += entrylen;
+			if (S_ISGITLINK(*mode))
+			{
+				fprintf(stderr,"find_tree_entry: %s\n", name);
+				reach_submodule(top->path, top->len, top->sha1, sha1);
+				top = NULL;
+			}
 			return 0;
 		}
 		if (name[entrylen] != '/')
@@ -470,6 +479,7 @@ static int find_tree_entry(struct tree_desc *t, const char *name,
 		top->len += entrylen;
 		if (S_ISGITLINK(*mode))
 		{
+			fprintf(stderr,"find_tree_entry: %s\n", name);
 			reach_submodule(top->path, top->len, top->sha1, sha1);
 			top = NULL;
 		}

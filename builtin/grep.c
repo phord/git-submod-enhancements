@@ -376,6 +376,9 @@ static int grep_cache(struct grep_opt *opt, const struct pathspec *pathspec, int
 
 	for (nr = 0; nr < active_nr; nr++) {
 		const struct cache_entry *ce = active_cache[nr];
+		if (S_ISGITLINK(ce->ce_mode)) {
+			fprintf(stderr,"grep_cache: %d. gitlink %s %s %u %08x %08X\n", nr, sha1_to_hex(ce->sha1), ce->name, cached, ce->ce_mode, ce->ce_flags);
+		}
 		if (!S_ISREG(ce->ce_mode))
 			continue;
 		if (!ce_path_match(ce, pathspec, NULL))
@@ -467,7 +470,7 @@ static int grep_tree(struct grep_opt *opt, const struct pathspec *pathspec,
 				free(tree);
 			}
 			else
-				printf("    failed\n");
+				fprintf(stderr,"    reach_submodule(%*s, ...) failed\n", (int)base->len , base->buf);
 			// TODO: Warn or die if REACH_SUBMODULE_MISSING_REF?
 		}
 		strbuf_setlen(base, old_baselen);
